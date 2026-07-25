@@ -1,11 +1,13 @@
 <?php
 
-namespace App\Livewire;
+namespace YasKSalim\MagicGenerator\Livewire;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
+use YasKSalim\MagicGenerator\Engine\GeneratorEngine;
 
-class CrudConfigurationMatrix extends Component
+class CrudMatrix extends Component
 {
     public string $techStack = 'livewire-v3';
 
@@ -28,6 +30,13 @@ class CrudConfigurationMatrix extends Component
     public bool $selectAllIndex = false;
     public bool $selectAllCreate = false;
     public bool $selectAllEdit = false;
+    public bool $selectAllPrint = false;
+
+    public bool $generating = false;
+
+    public ?string $generationStatus = null;
+
+    public array $generatedFiles = [];
 
     public function mount(): void
     {
@@ -36,13 +45,23 @@ class CrudConfigurationMatrix extends Component
 
     public function loadTables(): void
     {
-        $this->tables = Schema::getTableNames()
-            ?: Schema::getAllTables();
+        if (method_exists(Schema::class, 'getTableNames')) {
+            $result = Schema::getTableNames();
+            $this->tables = is_array($result) ? $result : (method_exists($result, 'toArray') ? $result->toArray() : (array) $result);
+        } else {
+            $tables = Schema::getAllTables();
+            $this->tables = array_map(fn ($t) => $t->{'Tables_in_' . DB::getDatabaseName()} ?? $t->TABLE_NAME ?? $t->tablename ?? $t->name, $tables);
+            $this->tables = array_filter($this->tables);
+        }
+
+        $this->tables = array_values($this->tables);
     }
 
     public function updatedSelectedTable(): void
     {
         $this->loadColumns();
+        $this->generationStatus = null;
+        $this->generatedFiles = [];
     }
 
     public function loadColumns(): void
@@ -61,8 +80,10 @@ class CrudConfigurationMatrix extends Component
             $builder = Schema::getConnection()->getDoctrineSchemaManager();
             $doctrineColumns = $builder->listTableColumns($tableName);
 
+            $skipCols = ['id', 'created_at', 'updated_at', 'deleted_at'];
+
             foreach ($columns as $col) {
-                if (!isset($doctrineColumns[$col])) {
+                if (!isset($doctrineColumns[$col]) || in_array($col, $skipCols)) {
                     continue;
                 }
 
@@ -70,9 +91,8 @@ class CrudConfigurationMatrix extends Component
                 $typeName = $doctrine->getType()->getName();
                 $nullable = !$doctrine->getNotnull();
                 $length = $doctrine->getLength();
-                $isAutoincrement = $doctrine->getAutoincrement();
 
-                if ($isAutoincrement) {
+                if ($doctrine->getAutoincrement()) {
                     continue;
                 }
 
@@ -153,10 +173,11 @@ class CrudConfigurationMatrix extends Component
         [$showIndex, $showCreate, $showEdit] = $this->defaultVisibility($column, $type);
 
         return [
-            'show_index' => $showIndex,
+            'show_index'  => $showIndex,
             'show_create' => $showCreate,
-            'show_edit' => $showEdit,
-            'input_type' => $this->defaultInputType($type),
+            'show_edit'   => $showEdit,
+            'show_print'  => $showIndex,
+            'input_type'  => $this->defaultInputType($type),
             'validation_rules' => $this->defaultValidationRule($type, $nullable, $column),
         ];
     }
@@ -214,22 +235,29 @@ class CrudConfigurationMatrix extends Component
 
     public function updatedSelectAllIndex(): void
     {
-        foreach ($this->columnConfigs as $col => &$config) {
-            $config['show_index'] = $this->selectAllIndex;
+        foreach (array_keys($this->columnConfigs) as $col) {
+            $this->columnConfigs[$col]['show_index'] = $this->selectAllIndex;
         }
     }
 
     public function updatedSelectAllCreate(): void
     {
-        foreach ($this->columnConfigs as $col => &$config) {
-            $config['show_create'] = $this->selectAllCreate;
+        foreach (array_keys($this->columnConfigs) as $col) {
+            $this->columnConfigs[$col]['show_create'] = $this->selectAllCreate;
         }
     }
 
     public function updatedSelectAllEdit(): void
     {
-        foreach ($this->columnConfigs as $col => &$config) {
-            $config['show_edit'] = $this->selectAllEdit;
+        foreach (array_keys($this->columnConfigs) as $col) {
+            $this->columnConfigs[$col]['show_edit'] = $this->selectAllEdit;
+        }
+    }
+
+    public function updatedSelectAllPrint(): void
+    {
+        foreach (array_keys($this->columnConfigs) as $col) {
+            $this->columnConfigs[$col]['show_print'] = $this->selectAllPrint;
         }
     }
 
@@ -260,8 +288,54 @@ class CrudConfigurationMatrix extends Component
         return $this->selectedTable;
     }
 
+    public function getModuleDirAttribute(): string
+    {
+        return \Illuminate\Support\Str::studly($this->selectedTable);
+    }
+
+    public function generate(): void
+    {
+        $this->reset('generationStatus', 'generatedFiles');
+
+        if (empty($this->selectedTable)) {
+            $this->generationStatus = 'error';
+            $this->dispatch('g-status', type: 'error', message: 'Select a table first.');
+            return;
+        }
+
+        $this->generating = true;
+
+        try {
+            $engine = app(GeneratorEngine::class);
+
+            $result = $engine->run(
+                table: $this->selectedTable,
+                techStack: $this->techStack,
+                columns: $this->columns,
+                columnConfigs: $this->columnConfigs,
+                displayNameColumn: $this->displayNameColumn,
+                successMessage: $this->successMessage,
+                deleteConfirmationMessage: $this->deleteConfirmationMessage,
+                modularFolders: $this->modularFolders,
+            );
+
+            $this->generatedFiles = $result['files'];
+            $this->generationStatus = 'success';
+            $this->dispatch('g-status', type: 'success', message: 'CRUD generated successfully! ' . count($result['files']) . ' files created.');
+
+            if (!empty($result['routes_appended'])) {
+                $this->dispatch('g-status', type: 'info', message: 'Routes appended to routes/web.php');
+            }
+        } catch (\Throwable $e) {
+            $this->generationStatus = 'error';
+            $this->dispatch('g-status', type: 'error', message: $e->getMessage());
+        } finally {
+            $this->generating = false;
+        }
+    }
+
     public function render()
     {
-        return view('livewire.crud-configuration-matrix');
+        return view('magic-generator::livewire.crud-matrix');
     }
 }
