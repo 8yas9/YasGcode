@@ -9,6 +9,8 @@ class MagicGeneratorServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->mergeConfigFrom(__DIR__ . '/../config/magic-generator.php', 'magic-generator');
+
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'magic-generator');
 
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
@@ -25,9 +27,7 @@ class MagicGeneratorServiceProvider extends ServiceProvider
             __DIR__ . '/../stubs' => config('magic-generator.stubs_path', base_path('stubs/vendor/magic-generator')),
         ], 'magic-generator-stubs');
 
-        $this->mergeConfigFrom(__DIR__ . '/../config/magic-generator.php', 'magic-generator');
-
-        Livewire::component('magic-generator', Livewire\CrudMatrix::class);
+        Livewire::component('magic-generator', Http\Livewire\GeneratorDashboard::class);
     }
 
     public function register(): void

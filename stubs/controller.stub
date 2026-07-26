@@ -1,0 +1,66 @@
+<?php
+
+namespace {{Namespace}};
+
+use App\Models\{{ModelName}};
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\View\View;
+
+class {{ModelName}}Controller extends Controller
+{
+    public function index(): View
+    {
+        $items = {{ModelName}}::paginate(10);
+
+        return view('{{tableName}}.index', compact('items'));
+    }
+
+    public function create(): View
+    {
+        return view('{{tableName}}.create');
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+{{ValidationRules}}
+        ]);
+
+        {{ModelName}}::create($validated);
+
+        return redirect()->route('{{tableName}}.index')
+            ->with('success', '{{SuccessMessage}}');
+    }
+
+    public function show({{ModelName}} ${{modelName}}): View
+    {
+        return view('{{tableName}}.show', compact('{{modelName}}'));
+    }
+
+    public function edit({{ModelName}} ${{modelName}}): View
+    {
+        return view('{{tableName}}.edit', compact('{{modelName}}'));
+    }
+
+    public function update(Request $request, {{ModelName}} ${{modelName}}): RedirectResponse
+    {
+        $validated = $request->validate([
+{{ValidationRules}}
+        ]);
+
+        ${{modelName}}->update($validated);
+
+        return redirect()->route('{{tableName}}.index')
+            ->with('success', '{{SuccessMessage}}');
+    }
+
+    public function destroy({{ModelName}} ${{modelName}}): RedirectResponse
+    {
+        ${{modelName}}->delete();
+
+        return redirect()->route('{{tableName}}.index')
+            ->with('success', '{{DeleteConfirmationMessage}}');
+    }
+}

@@ -1,0 +1,22 @@
+<?php
+
+namespace {{Namespace}};
+
+use App\Models\{{ModelName}};
+use Livewire\Component;
+
+class Show{{ModelName}} extends Component
+{
+    public {{ModelName}} ${{modelName}};
+
+    public function mount({{ModelName}} ${{modelName}}): void
+    {
+        $this->{{modelName}} = ${{modelName}};
+    }
+
+    public function render()
+    {
+        return view('{{tableName}}.show')
+            ->layout('components.layouts.app');
+    }
+}

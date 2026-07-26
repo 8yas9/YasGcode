@@ -1,0 +1,36 @@
+<?php
+
+namespace {{Namespace}};
+
+use App\Models\{{ModelName}};
+use Livewire\Component;
+
+class Edit{{ModelName}} extends Component
+{
+    public {{ModelName}} ${{modelName}};
+
+    public {{ModelName}}Form $form;
+
+    public function mount({{ModelName}} ${{modelName}}): void
+    {
+        $this->{{modelName}} = ${{modelName}};
+        $this->form->fill(${{modelName}}->toArray());
+    }
+
+    public function update(): void
+    {
+        $this->form->validate();
+
+        $this->{{modelName}}->update($this->form->all());
+
+        session()->flash('success', '{{SuccessMessage}}');
+
+        $this->redirect(route('{{tableName}}.index'));
+    }
+
+    public function render()
+    {
+        return view('{{tableName}}.edit')
+            ->layout('components.layouts.app');
+    }
+}

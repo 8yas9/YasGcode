@@ -1,0 +1,28 @@
+<?php
+
+namespace {{Namespace}};
+
+use App\Models\{{ModelName}};
+use Livewire\Component;
+
+class Create{{ModelName}} extends Component
+{
+    public {{ModelName}}Form $form;
+
+    public function save(): void
+    {
+        $this->form->validate();
+
+        {{ModelName}}::create($this->form->all());
+
+        session()->flash('success', '{{SuccessMessage}}');
+
+        $this->redirect(route('{{tableName}}.index'));
+    }
+
+    public function render()
+    {
+        return view('{{tableName}}.create')
+            ->layout('components.layouts.app');
+    }
+}

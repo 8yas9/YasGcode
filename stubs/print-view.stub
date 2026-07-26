@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ModelName}} Print</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 2rem; color: #1f2937; }
+        h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; padding-bottom: .5rem; border-bottom: 2px solid #e5e7eb; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: .6rem .5rem; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        td:first-child { font-weight: 600; color: #4b5563; width: 30%; }
+        @media print { body { padding: 0; } }
+    </style>
+</head>
+<body>
+    <h1>{{ModelName}}</h1>
+    <table>
+{{PrintFields}}
+    </table>
+</body>
+</html>
