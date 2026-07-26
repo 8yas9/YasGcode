@@ -2,6 +2,7 @@
 
 namespace YasKSalim\MagicGenerator\Http\Livewire;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use YasKSalim\MagicGenerator\Services\GeneratorEngine;
@@ -46,9 +47,17 @@ class GeneratorDashboard extends Component
 
     public function loadTables(): void
     {
-        $schema = Schema::getConnection()->getDoctrineSchemaManager();
-
-        $this->tables = $schema->listTableNames();
+        if ($this->hasDoctrine()) {
+            $schema = Schema::getConnection()->getDoctrineSchemaManager();
+            $this->tables = $schema->listTableNames();
+        } elseif (method_exists(Schema::class, 'getTableNames')) {
+            $result = Schema::getTableNames();
+            $this->tables = is_array($result) ? $result : (method_exists($result, 'toArray') ? $result->toArray() : (array) $result);
+        } else {
+            $rows = Schema::getAllTables();
+            $this->tables = array_map(fn ($t) => $t->{'Tables_in_' . DB::getDatabaseName()} ?? $t->TABLE_NAME ?? $t->tablename ?? $t->name ?? '', $rows);
+            $this->tables = array_values(array_filter($this->tables));
+        }
 
         $this->tables = array_values($this->tables);
     }
@@ -69,6 +78,20 @@ class GeneratorDashboard extends Component
         }
 
         $table = $this->selectedTable;
+
+        if ($this->hasDoctrine()) {
+            $this->loadColumnsWithDoctrine($table);
+        } else {
+            $this->loadColumnsSimple($table);
+        }
+
+        if (count($this->columns) > 0) {
+            $this->displayNameColumn = $this->columns[0]['name'];
+        }
+    }
+
+    protected function loadColumnsWithDoctrine(string $table): void
+    {
         $schema = Schema::getConnection()->getDoctrineSchemaManager();
         $doctrineColumns = $schema->listTableColumns($table);
 
@@ -92,10 +115,70 @@ class GeneratorDashboard extends Component
 
             $this->columnConfigs[$colName] = $this->defaultConfig($colName, $typeName, !$col->getNotnull());
         }
+    }
 
-        if (count($this->columns) > 0) {
-            $this->displayNameColumn = $this->columns[0]['name'];
+    protected function loadColumnsSimple(string $table): void
+    {
+        $columns = Schema::getColumnListing($table);
+        $types = $this->getColumnTypesFromSchema($table);
+
+        foreach ($columns as $col) {
+            if (in_array($col, $this->skipColumns, true)) {
+                continue;
+            }
+
+            $typeInfo = $types[$col] ?? ['type' => 'string', 'nullable' => false];
+            $typeName = $typeInfo['type'];
+            $nullable = $typeInfo['nullable'];
+
+            $this->columns[] = [
+                'name'     => $col,
+                'type'     => $typeName,
+                'nullable' => $nullable,
+                'length'   => null,
+            ];
+
+            $this->columnConfigs[$col] = $this->defaultConfig($col, $typeName, $nullable);
         }
+    }
+
+    protected function getColumnTypesFromSchema(string $table): array
+    {
+        $types = [];
+        $results = Schema::getConnection()
+            ->select('SHOW COLUMNS FROM `' . str_replace('`', '``', $table) . '`');
+
+        foreach ($results as $row) {
+            $row = (array) $row;
+            $typeRaw = $row['Type'] ?? $row['type'] ?? '';
+            $nullRaw = $row['Null'] ?? $row['null'] ?? 'YES';
+
+            $typeName = 'string';
+            if (preg_match('/^(int|bigint|smallint|tinyint)/i', $typeRaw)) {
+                $typeName = 'integer';
+            } elseif (preg_match('/^(decimal|float|double)/i', $typeRaw)) {
+                $typeName = 'float';
+            } elseif (preg_match('/^text|longtext|mediumtext/i', $typeRaw)) {
+                $typeName = 'text';
+            } elseif (preg_match('/^date|datetime|timestamp/i', $typeRaw)) {
+                $typeName = 'date';
+            } elseif (preg_match('/^tinyint\(1\)/i', $typeRaw)) {
+                $typeName = 'boolean';
+            }
+
+            $field = $row['Field'] ?? $row['field'] ?? '';
+            $types[$field] = [
+                'type'     => $typeName,
+                'nullable' => strtoupper($nullRaw) === 'YES',
+            ];
+        }
+
+        return $types;
+    }
+
+    protected function hasDoctrine(): bool
+    {
+        return class_exists(\Doctrine\DBAL\DriverManager::class);
     }
 
     protected function defaultConfig(string $column, string $type, bool $nullable): array
