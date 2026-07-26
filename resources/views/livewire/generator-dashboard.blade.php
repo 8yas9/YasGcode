@@ -529,14 +529,20 @@
                                 <input id="menuLayoutPath" type="text" wire:model.blur="menuLayoutPath" class="block w-full rounded-lg border-gray-300 px-3 py-2.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" placeholder="resources/views/layouts/contentNavbarLayout.blade.php">
                             </div>
                         </div>
+                        @php
+                            $previewPrefix = $menuRoutePrefix ?: 'prefix';
+                            $previewIcon = $menuIcon ? '&lt;i class="' . e($menuIcon) . '"&gt;&lt;/i&gt;' . "\n        " : '';
+                            $previewLabel = e($menuLabel ?: 'Label');
+                            $pr1 = '&lt;li class="menu-item {{ request()->routeIs(\'' . $previewPrefix . '.*\') ? \'active\' : \'\' }}"&gt;';
+                            $pr2 = '    &lt;a href="{{ route(\'' . $previewPrefix . '.index\') }}" class="menu-link"&gt;';
+                            $pr3 = '        ' . $previewIcon . '&lt;div&gt;' . $previewLabel . '&lt;/div&gt;';
+                            $pr4 = '    &lt;/a&gt;';
+                            $pr5 = '&lt;/li&gt;';
+                            $menuPreview = implode("\n", [$pr1, $pr2, $pr3, $pr4, $pr5]);
+                        @endphp
                         <div class="rounded-lg bg-gray-50 border border-gray-200 p-3 mt-2">
                             <p class="text-xs font-semibold text-gray-700 mb-2">Preview:</p>
-                            <pre class="text-[11px] font-mono text-gray-600 leading-relaxed overflow-x-auto">&lt;li class="menu-item {{ request()->routeIs('{{ $menuRoutePrefix ?: '{prefix}' }}.*') ? 'active' : '' }}"&gt;
-    &lt;a href="{{ route('{{ $menuRoutePrefix ?: '{prefix}' }}.index') }}" class="menu-link"&gt;
-        @if ($menuIcon)&lt;i class="{{ $menuIcon }}"&gt;&lt;/i&gt;@endif
-        &lt;div class="fw-normal"&gt;{{ $menuLabel ?: 'Label' }}&lt;/div&gt;
-    &lt;/a&gt;
-&lt;/li&gt;</pre>
+                            <pre class="text-[11px] font-mono text-gray-600 leading-relaxed overflow-x-auto">{{ $menuPreview }}</pre>
                         </div>
                     @endif
                 </div>
