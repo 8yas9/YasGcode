@@ -54,8 +54,9 @@ class GeneratorDashboard extends Component
             $result = Schema::getTableNames();
             $this->tables = is_array($result) ? $result : (method_exists($result, 'toArray') ? $result->toArray() : (array) $result);
         } else {
-            $rows = Schema::getAllTables();
-            $this->tables = array_map(fn ($t) => $t->{'Tables_in_' . DB::getDatabaseName()} ?? $t->TABLE_NAME ?? $t->tablename ?? $t->name ?? '', $rows);
+            $rows = DB::select('SHOW TABLES');
+            $key = 'Tables_in_' . DB::getDatabaseName();
+            $this->tables = array_map(fn ($t) => $t->$key ?? '', $rows);
             $this->tables = array_values(array_filter($this->tables));
         }
 
