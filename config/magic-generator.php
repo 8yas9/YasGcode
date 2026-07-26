@@ -5,10 +5,12 @@ return [
     'stubs_path' => __DIR__ . '/../stubs',
 
     'paths' => [
-        'controller' => 'app/Http/Controllers',
-        'model'       => 'app/Models',
-        'livewire'    => 'app/Livewire',
-        'views'       => 'resources/views',
+        'controller'  => 'app/Http/Controllers',
+        'model'        => 'app/Models',
+        'livewire'     => 'app/Livewire',
+        'views'        => 'resources/views',
+        'form_request' => 'app/Http/Requests',
+        'policy'       => 'app/Policies',
     ],
 
     'defaults' => [
@@ -17,7 +19,12 @@ return [
     ],
 
     'routes' => [
-        'prefix' => 'magic-generator',
+        'prefix'    => 'magic-generator',
         'middleware' => ['web'],
+    ],
+
+    'menu' => [
+        'layout_path' => 'resources/views/layouts/contentNavbarLayout.blade.php',
+        'enabled'     => false,
     ],
 ];

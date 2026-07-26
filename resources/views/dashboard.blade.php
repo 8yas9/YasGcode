@@ -14,7 +14,7 @@
                 <h1 class="text-xl font-bold text-gray-900 tracking-tight">
                     <span class="text-indigo-600">Magic</span> Generator
                 </h1>
-                <span class="text-xs text-gray-400">v1.0</span>
+                <span class="text-xs text-gray-400">v1.1</span>
             </div>
         </header>
         <main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

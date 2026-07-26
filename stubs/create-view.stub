@@ -19,4 +19,27 @@
             </div>
         </div>
     </div>
+
+    @push('scripts')
+        <link href="https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js"></script>
+        <script>
+            (function() {
+                function initTomSelect() {
+                    document.querySelectorAll('.ts-select:not(.ts-initialized)').forEach(function(el) {
+                        el.classList.add('ts-initialized');
+                        try { new TomSelect(el); } catch(e) {}
+                    });
+                }
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initTomSelect);
+                } else {
+                    initTomSelect();
+                }
+                if (typeof Livewire !== 'undefined') {
+                    Livewire.hook('element.initialized', initTomSelect);
+                }
+            })();
+        </script>
+    @endpush
 </x-app-layout>

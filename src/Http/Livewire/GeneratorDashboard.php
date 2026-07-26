@@ -4,6 +4,7 @@ namespace YasKSalim\MagicGenerator\Http\Livewire;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use YasKSalim\MagicGenerator\Services\GeneratorEngine;
 
@@ -36,13 +37,50 @@ class GeneratorDashboard extends Component
 
     public array $generatedFiles = [];
 
+    public array $deletedFiles = [];
+
+    public array $relatedTableColumns = [];
+
+    public string $searchQuery = '';
+
+    public bool $softDeletes = false;
+    public bool $timestamps = true;
+    public bool $generateFormRequest = false;
+    public bool $generatePolicy = false;
+    public bool $generateApi = false;
+    public string $apiPrefix = 'api';
+
+    public bool $generateMenuItem = false;
+    public string $menuLayoutPath = 'resources/views/layouts/contentNavbarLayout.blade.php';
+    public string $menuLabel = '';
+    public string $menuIcon = '';
+    public string $menuRoutePrefix = '';
+
+    public int $progressCurrent = 0;
+    public int $progressTotal = 0;
+    public string $progressMessage = '';
+
     protected array $skipColumns = ['id', 'created_at', 'updated_at', 'deleted_at'];
 
     protected array $hiddenColumns = ['password', 'remember_token', 'api_token'];
 
+    protected $listeners = ['importConfig'];
+
     public function mount(): void
     {
         $this->loadTables();
+    }
+
+    public function getFilteredTablesProperty(): array
+    {
+        if (empty($this->searchQuery)) {
+            return $this->tables;
+        }
+
+        return array_values(array_filter(
+            $this->tables,
+            fn ($t) => stripos($t, $this->searchQuery) !== false
+        ));
     }
 
     public function loadTables(): void
@@ -67,6 +105,10 @@ class GeneratorDashboard extends Component
     {
         $this->loadColumns();
         $this->generatedFiles = [];
+        if ($this->selectedTable) {
+            $this->menuLabel = str_replace('_', ' ', Str::title(Str::singular($this->selectedTable)));
+            $this->menuRoutePrefix = $this->selectedTable;
+        }
     }
 
     public function loadColumns(): void
@@ -187,12 +229,21 @@ class GeneratorDashboard extends Component
         [$showIndex, $showCreate, $showEdit] = $this->defaultVisibility($column);
 
         return [
-            'show_index'       => $showIndex,
-            'show_create'      => $showCreate,
-            'show_edit'        => $showEdit,
-            'show_print'       => $showIndex,
-            'input_type'       => $this->defaultInputType($type),
-            'validation_rules' => $this->defaultValidationRule($type, $nullable, $column),
+            'show_index'            => $showIndex,
+            'show_create'           => $showCreate,
+            'show_edit'             => $showEdit,
+            'show_print'            => $showIndex,
+            'input_type'            => $this->defaultInputType($type),
+            'validation_rules'      => $this->defaultValidationRule($type, $nullable, $column),
+            'label'                 => '',
+            'select_options'        => '',
+            'select_from_table'     => false,
+            'select_table'          => '',
+            'select_value_column'   => 'id',
+            'select_display_column' => '',
+            'searchable_select'     => false,
+            'foreign_table'         => '',
+            'foreign_column'        => '',
         ];
     }
 
@@ -238,6 +289,36 @@ class GeneratorDashboard extends Component
         return implode('|', $rules);
     }
 
+    public function loadRelatedTableColumns(string $colName): void
+    {
+        $table = $this->columnConfigs[$colName]['select_table'] ?? '';
+
+        if (empty($table)) {
+            return;
+        }
+
+        $this->relatedTableColumns[$table] = Schema::getColumnListing($table);
+    }
+
+    public function updatedColumnConfigs($value, $key): void
+    {
+        $parts = explode('.', $key);
+        $colName = $parts[0];
+        $field = $parts[1] ?? '';
+
+        if ($field === 'select_table' && !empty($value)) {
+            $this->loadRelatedTableColumns($colName);
+        }
+
+        if ($field === 'input_type') {
+            if ($value !== 'select') {
+                $this->columnConfigs[$colName]['select_options'] = '';
+                $this->columnConfigs[$colName]['select_from_table'] = false;
+                $this->columnConfigs[$colName]['select_table'] = '';
+            }
+        }
+    }
+
     public function updatedSelectAllIndex(): void
     {
         foreach (array_keys($this->columnConfigs) as $col) {
@@ -277,6 +358,54 @@ class GeneratorDashboard extends Component
         }
     }
 
+    public function getConfigJson(): string
+    {
+        return json_encode([
+            'techStack'               => $this->techStack,
+            'selectedTable'           => $this->selectedTable,
+            'successMessage'          => $this->successMessage,
+            'deleteConfirmationMessage' => $this->deleteConfirmationMessage,
+            'displayNameColumn'       => $this->displayNameColumn,
+            'modularFolders'          => $this->modularFolders,
+            'columnConfigs'           => $this->columnConfigs,
+        ], JSON_PRETTY_PRINT);
+    }
+
+    public function exportConfig(): void
+    {
+        $this->dispatch('g-status', type: 'info', message: 'Config copied to clipboard. Paste into Import to restore.');
+        $this->dispatch('copy-to-clipboard', content: $this->getConfigJson());
+    }
+
+    public function importConfig($json): void
+    {
+        $data = json_decode($json, true);
+
+        if (!$data || !isset($data['columnConfigs'])) {
+            $this->dispatch('g-status', type: 'error', message: 'Invalid config JSON.');
+            return;
+        }
+
+        if (isset($data['techStack'])) $this->techStack = $data['techStack'];
+        if (isset($data['selectedTable'])) $this->selectedTable = $data['selectedTable'];
+        if (isset($data['successMessage'])) $this->successMessage = $data['successMessage'];
+        if (isset($data['deleteConfirmationMessage'])) $this->deleteConfirmationMessage = $data['deleteConfirmationMessage'];
+        if (isset($data['displayNameColumn'])) $this->displayNameColumn = $data['displayNameColumn'];
+        if (isset($data['modularFolders'])) $this->modularFolders = $data['modularFolders'];
+
+        if ($this->selectedTable) {
+            $this->loadColumns();
+        }
+
+        foreach ($data['columnConfigs'] as $col => $config) {
+            if (isset($this->columnConfigs[$col])) {
+                $this->columnConfigs[$col] = array_merge($this->columnConfigs[$col], $config);
+            }
+        }
+
+        $this->dispatch('g-status', type: 'success', message: 'Config imported successfully.');
+    }
+
     public function generate(): void
     {
         $this->generatedFiles = [];
@@ -287,9 +416,17 @@ class GeneratorDashboard extends Component
         }
 
         $this->generating = true;
+        $this->progressCurrent = 0;
+        $this->progressTotal = 0;
+        $this->progressMessage = '';
 
         try {
             $engine = app(GeneratorEngine::class);
+
+            $totalFiles = count($this->columns) + 6;
+            $this->progressTotal = $totalFiles;
+            $this->progressMessage = 'Starting generation...';
+            $this->dispatch('g-progress', current: 0, total: $totalFiles, message: 'Starting...');
 
             $result = $engine->run(
                 table: $this->selectedTable,
@@ -300,9 +437,22 @@ class GeneratorDashboard extends Component
                 successMessage: $this->successMessage,
                 deleteConfirmationMessage: $this->deleteConfirmationMessage,
                 modularFolders: $this->modularFolders,
+                softDeletes: $this->softDeletes,
+                timestamps: $this->timestamps,
+                generateFormRequest: $this->generateFormRequest,
+                generatePolicy: $this->generatePolicy,
+                generateApi: $this->generateApi,
+                apiPrefix: $this->apiPrefix,
+                generateMenuItem: $this->generateMenuItem,
+                menuLayoutPath: $this->menuLayoutPath,
+                menuLabel: $this->menuLabel,
+                menuIcon: $this->menuIcon,
+                menuRoutePrefix: $this->menuRoutePrefix,
             );
 
             $this->generatedFiles = $result['files'];
+            $this->progressCurrent = count($result['files']);
+            $this->progressMessage = 'Complete!';
 
             $count = count(array_filter($result['files'], fn ($f) => $f['written']));
             $this->dispatch('g-status', type: 'success', message: "{$count} files generated successfully.");
@@ -310,10 +460,53 @@ class GeneratorDashboard extends Component
             if ($result['routes_appended']) {
                 $this->dispatch('g-status', type: 'info', message: 'Module routes appended to routes/web.php.');
             }
+            if (!empty($result['api_routes_appended'])) {
+                $this->dispatch('g-status', type: 'info', message: 'API routes appended to routes/api.php.');
+            }
+            if (!empty($result['menu_item_appended'])) {
+                $this->dispatch('g-status', type: 'info', message: 'Menu item appended to layout.');
+            }
         } catch (\Throwable $e) {
-            $this->dispatch('g-status', type: 'error', message: $e->getMessage());
+            $this->dispatch('g-status', type: 'error', message: 'Generation failed: ' . $e->getMessage());
         } finally {
             $this->generating = false;
+        }
+    }
+
+    public function deleteGenerated(): void
+    {
+        if (empty($this->selectedTable)) {
+            $this->dispatch('g-status', type: 'error', message: 'Please select a table first.');
+            return;
+        }
+
+        $engine = app(GeneratorEngine::class);
+
+        $result = $engine->deleteGenerated(
+            table: $this->selectedTable,
+            techStack: $this->techStack,
+            modularFolders: $this->modularFolders,
+            generateApi: $this->generateApi,
+            generateMenuItem: $this->generateMenuItem,
+            menuLayoutPath: $this->menuLayoutPath,
+            apiPrefix: $this->apiPrefix,
+        );
+
+        $this->generatedFiles = [];
+        $this->deletedFiles = $result['deleted'];
+        $count = count($result['deleted']);
+
+        $message = "{$count} items deleted.";
+        $this->dispatch('g-status', type: 'success', message: $message);
+
+        if ($result['routes_removed']) {
+            $this->dispatch('g-status', type: 'info', message: 'Routes removed from routes/web.php.');
+        }
+        if ($result['api_routes_removed']) {
+            $this->dispatch('g-status', type: 'info', message: 'API routes removed from routes/api.php.');
+        }
+        if ($result['menu_item_removed']) {
+            $this->dispatch('g-status', type: 'info', message: 'Menu item removed from layout.');
         }
     }
 

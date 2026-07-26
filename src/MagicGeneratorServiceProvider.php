@@ -13,6 +13,8 @@ class MagicGeneratorServiceProvider extends ServiceProvider
 
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'magic-generator');
 
+        $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'magic-generator');
+
         $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
 
         $this->publishes([
